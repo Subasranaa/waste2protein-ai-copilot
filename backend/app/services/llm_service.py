@@ -14,32 +14,20 @@ class LLMService:
         self.groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
     def generate_insight(self, input_data: PredictionInput, prediction_result: dict) -> dict:
-
         if self.provider == "groq" and self.groq_api_key:
             try:
                 return self._generate_with_groq(input_data, prediction_result)
+            except Exception:
+                return self._fallback_response(input_data, prediction_result)
 
-            except Exception as error:
-                return self._mock_response(
-                    input_data,
-                    prediction_result,
-                    fallback_reason=str(error),
-                )
-
-        return self._mock_response(
-            input_data,
-            prediction_result,
-            fallback_reason="No real LLM provider configured.",
-        )
+        return self._fallback_response(input_data, prediction_result)
 
     def _generate_with_groq(
         self,
         input_data: PredictionInput,
         prediction_result: dict,
     ) -> dict:
-
         client = Groq(api_key=self.groq_api_key)
-
         prompt = self._build_prompt(input_data, prediction_result)
 
         completion = client.chat.completions.create(
@@ -50,14 +38,18 @@ class LLMService:
                     "content": (
                         "You are an expert AI assistant for microbial protein "
                         "production from agri-food waste streams. "
+                        "Use cautious scientific language such as "
+                        "'may be suitable', 'could be explored', or "
+                        "'requires validation'. "
+                        "Do not claim biological suitability as fact unless "
+                        "it is directly supported by the input. "
+                        "Do not invent laboratory results or scientific evidence. "
+                        "Treat all outputs as decision-support suggestions only. "
                         "Return only valid JSON. "
                         "Do not include markdown."
                     ),
                 },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.2,
         )
@@ -65,33 +57,15 @@ class LLMService:
         raw_text = completion.choices[0].message.content
 
         try:
-            parsed = json.loads(raw_text)
-
+            return json.loads(raw_text)
         except json.JSONDecodeError:
-
-            parsed = {
-                "summary": raw_text,
-                "microbial_recommendations": [],
-                "limiting_factors": [],
-                "recommendations": [],
-                "r_and_d_roadmap": [],
-                "confidence_note": (
-                    "LLM response was not valid JSON, "
-                    "so it was returned as plain text."
-                ),
-            }
-
-        parsed["provider"] = "groq"
-        parsed["model"] = self.groq_model
-
-        return parsed
+            return self._fallback_response(input_data, prediction_result)
 
     def _build_prompt(
         self,
         input_data: PredictionInput,
         prediction_result: dict,
     ) -> str:
-
         return f"""
 Given the following agri-food waste stream and protein yield prediction,
 generate practical decision-support insights.
@@ -149,96 +123,64 @@ Do not invent laboratory results.
 Treat the prediction as decision-support only.
 """
 
-    def _mock_response(
+    def _fallback_response(
         self,
         input_data: PredictionInput,
         prediction_result: dict,
-        fallback_reason: str = "Mock fallback used.",
     ) -> Dict[str, Any]:
-
         predicted_yield = prediction_result["predicted_protein_yield"]
         uncertainty = prediction_result["uncertainty"]
 
         if predicted_yield >= 55:
-            yield_comment = (
-                "The predicted protein yield is relatively strong."
-            )
-
+            summary = "The predicted protein yield is relatively strong, but experimental validation is required."
         elif predicted_yield >= 35:
-            yield_comment = (
-                "The predicted protein yield is moderate and may "
-                "be improved through process optimisation."
-            )
-
+            summary = "The predicted protein yield is moderate and could be improved through process optimisation."
         else:
-            yield_comment = (
-                "The predicted protein yield is low and may "
-                "require additional optimisation."
-            )
+            summary = "The predicted protein yield is low and may require additional optimisation before scale-up."
 
         limiting_factors = []
 
         if input_data.ph < 5.5 or input_data.ph > 7.0:
-            limiting_factors.append(
-                "pH is outside the preferred fermentation range."
-            )
+            limiting_factors.append("pH may be outside a suitable fermentation range.")
 
         if input_data.temperature < 28 or input_data.temperature > 35:
-            limiting_factors.append(
-                "Temperature may not be optimal for microbial growth."
-            )
+            limiting_factors.append("Temperature may need further optimisation.")
 
         if input_data.nitrogen_content < 1.5:
-            limiting_factors.append(
-                "Nitrogen content appears low."
-            )
+            limiting_factors.append("Nitrogen content may limit microbial protein formation.")
 
         if input_data.sugar_content < 10:
-            limiting_factors.append(
-                "Sugar content may be insufficient for efficient microbial growth."
-            )
+            limiting_factors.append("Sugar content may be insufficient for efficient microbial growth.")
 
         if not limiting_factors:
-            limiting_factors.append(
-                "No major limiting factor detected."
-            )
+            limiting_factors.append("No major limiting factor was detected from the provided inputs.")
 
         return {
-            "summary": yield_comment,
-
+            "summary": summary,
             "microbial_recommendations": [
                 {
                     "microbe": "Saccharomyces cerevisiae",
                     "type": "yeast",
                     "reason": (
-                        "Widely used for sugar-rich fermentation processes."
+                        "This candidate could be explored for sugar-rich waste streams, "
+                        "but suitability must be validated experimentally."
                     ),
-                    "risk": (
-                        "Requires experimental validation for this waste stream."
-                    ),
+                    "risk": "Performance and safety should be tested on the specific waste stream.",
                 }
             ],
-
             "limiting_factors": limiting_factors,
-
             "recommendations": [
                 "Run small-scale fermentation trials before industrial scaling.",
-                "Monitor pH and nitrogen balance during fermentation.",
-                "Compare yeast and fungal strains.",
-                "Track consistency across batches.",
+                "Monitor pH, nitrogen balance, and temperature during fermentation.",
+                "Compare yeast, fungal, bacterial, or algal candidates experimentally.",
+                "Track yield consistency across repeated batches.",
             ],
-
             "r_and_d_roadmap": [
                 "Validate waste composition experimentally.",
                 "Perform bench-scale fermentation.",
-                "Optimise environmental conditions.",
-                "Evaluate microbial strain performance.",
-                "Estimate economic feasibility.",
+                "Optimise environmental and nutrient conditions.",
+                "Evaluate microbial candidate performance.",
+                "Estimate technical and economic feasibility before scale-up.",
             ],
-
-            "confidence_note": f"Estimated uncertainty is ±{uncertainty}.",
-
-            "provider": "mock",
-            "model": "mock-rule-based-insight-v0.1",
-            "fallback_reason": fallback_reason,
+            "confidence_note": f"Estimated model uncertainty is ±{uncertainty}. Results should be treated as decision-support only.",
         }

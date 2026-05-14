@@ -5,7 +5,7 @@ from app.services.prediction_service import PredictionService
 from app.services.llm_service import LLMService
 from app.services.cost_tracker import CostTracker
 from app.services.cache_service import CacheService
-from app.services.optimisation_service import OptimisationService
+from app.services.economics_service import EconomicsService
 
 router = APIRouter()
 
@@ -13,8 +13,7 @@ prediction_service = PredictionService()
 llm_service = LLMService()
 cost_tracker = CostTracker()
 cache_service = CacheService()
-optimisation_service = OptimisationService()
-
+economics_service = EconomicsService()
 
 
 @router.post("/")
@@ -25,29 +24,30 @@ def generate_prediction_insight(input_data: PredictionInput):
     cached_response = cache_service.get(cache_key)
 
     if cached_response:
-        cached_response["cached"] = True
         return cached_response
 
     prediction_result = prediction_service.predict(input_data)
-    llm_insight = llm_service.generate_insight(input_data, prediction_result)
+
+    llm_insight = llm_service.generate_insight(
+        input_data,
+        prediction_result,
+    )
+
+    economic_estimate = economics_service.estimate(
+        input_data=input_data,
+        predicted_protein_yield=prediction_result["predicted_protein_yield"],
+    )
 
     estimated_cost = cost_tracker.estimate_mock_cost(
         prompt_tokens=450,
         completion_tokens=300,
     )
-    optimised_parameters = optimisation_service.recommend_parameters(
-    input_data,
-    prediction_service,
-)
-    
 
     response = {
         "prediction": prediction_result,
         "insight": llm_insight,
+        "economic_estimate": economic_estimate,
         "estimated_llm_cost": estimated_cost,
-        "cached": False,
-        "llm_mode": llm_insight.get("provider", "mock"),
-        "optimised_parameters": optimised_parameters
     }
 
     cache_service.set(cache_key, response)
