@@ -38,7 +38,7 @@ def generate_prediction_insight(input_data: PredictionInput):
         "insight": llm_insight,
         "estimated_llm_cost": estimated_cost,
         "cached": False,
-        "llm_mode": "mock-rule-based-insight-v0.1"
+        "llm_mode": llm_insight.get("provider", "mock")
     }
 
     cache_service.set(cache_key, response)
