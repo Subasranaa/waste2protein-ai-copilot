@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.routes.health import router as health_router
 from app.routes.predict import router as predict_router
+from app.routes.insights import router as insights_router
 
 app = FastAPI(
     title="Waste2Protein AI Copilot API",
@@ -10,6 +11,7 @@ app = FastAPI(
 
 app.include_router(health_router, prefix="/health", tags=["Health"])
 app.include_router(predict_router, prefix="/predict", tags=["Prediction"])
+app.include_router(insights_router, prefix="/insights", tags=["Insights"])
 
 @app.get("/")
 def root():
