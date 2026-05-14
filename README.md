@@ -123,7 +123,7 @@ waste2protein-ai-copilot/
 ## 1. Clone Repository
 
 ```bash
-git clone <https://github.com/Subasranaa/waste2protein-ai-copilot.git>
+git clone https://github.com/Subasranaa/waste2protein-ai-copilot.git
 cd waste2protein-ai-copilot
 ```
 
